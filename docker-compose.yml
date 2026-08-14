@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: weaver_postgres
+    environment:
+      POSTGRES_USER: weaver_user
+      POSTGRES_PASSWORD: weaver_password
+      POSTGRES_DB: weaver_db
+      TZ: Asia/Kolkata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U weaver_user -d weaver_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - weaver_network
+
+  # Go Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: weaver_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://weaver_user:weaver_password@postgres:5432/weaver_db?sslmode=disable
+      SERVER_PORT: 8080
+      JWT_SECRET: demo-secret-key-change-in-production
+      ENV: development
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app
+    networks:
+      - weaver_network
+    restart: unless-stopped
+
+  # Frontend (Next.js) - Will be added later
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: weaver_frontend
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:8080
+  #   networks:
+  #     - weaver_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  weaver_network:
+    driver: bridge
